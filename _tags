@@ -1,0 +1,6 @@
+<test>: include
+
+<**/*.ml> or <**/*.{native,byte}>: debug
+
+<test/*.ml>: use_oUnit
+<test/*.{native,byte}>: use_unix, use_oUnit
