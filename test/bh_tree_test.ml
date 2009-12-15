@@ -92,8 +92,48 @@ let test_remove_to_empty () =
     | Empty -> true
     | _ -> false)
 
+let test_potential () = 
+  let bs = Array.init 1000 (fun _ -> {(make_random ()) with m = 1e-3}) in 
+  let distance q1 q2 = 
+    let d2 = ref 0.0 in 
+    for i = 0 to 2 do 
+      let dx = q1.(i) -. q2.(i) in 
+      d2 := !d2 +. dx*.dx
+    done;
+    !d2 in 
+  let v = ref 0.0 in 
+  for i = 0 to 999 do 
+    let b = bs.(i) in 
+    for j = i+1 to 999 do 
+      let b2 = bs.(j) in 
+      v := !v -. b.m*.b2.m/.(distance b.q b2.q)
+    done
+  done;
+  let v_exact = !v in 
+  let t = ref (tree_of_body_array bs) and 
+      v = ref 0.0 in 
+  for i = 0 to 999 do 
+    let b = bs.(i) in 
+    t := remove b !t;
+    v := !v +. 
+        (fold_approx 
+           (function 
+             | Cell(lower,upper,sb,_) -> 
+                 let r = distance lower upper and 
+                     d = distance b.q sb.q in 
+                 r/.d < 0.1
+             | _ -> false)
+           (fun tb vsum -> 
+             vsum -. b.m*.tb.m/.(distance b.q tb.q))
+           !t
+           0.0)
+  done;
+  assert_equal ~cmp:(cmp_float ~epsabs:0.0 ~epsrel:1e-2) 
+    ~printer:string_of_float v_exact !v
+                   
 let tests = "bh_tree.ml tests" >:::
   ["array and list constructors" >:: test_array_list;
    "basic validity tests" >:: test_valid;
    "test remove" >:: test_remove;
-   "test remove to empty" >:: test_remove_to_empty]
+   "test remove to empty" >:: test_remove_to_empty;
+   "potential calculation" >:: test_potential]

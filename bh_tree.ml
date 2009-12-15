@@ -46,7 +46,7 @@ module type BH_TREE = sig
   type b
         (** Bodies. *)
 
-  type t = private 
+  type t = 
     | Empty (** Empty tree. *)
     | Body of b (** Singleton body. *)
     | Cell of float array * float array * b * t array (** Cell with bounds, summary body, and sub-trees. *)
@@ -79,6 +79,25 @@ module type BH_TREE = sig
 
   val bodies : t -> b list
       (** Returns a list of all bodies in the tree. *)
+
+  val fold : (b -> 'a -> 'a) -> t -> 'a -> 'a
+      (** [fold kons t knil] applies [kons] to each body in [t] (in
+          unspecified order), using the result of each application as
+          the second argument for the next.  [knil] is used as the
+          second argument for the first application.  
+
+          For example, the [bodies] function could be written [let
+          bodies t = fold (fun b l -> b :: l) t \[\]] *)
+
+  val fold_approx : (t -> bool) -> (b -> 'a -> 'a) -> t -> 'a -> 'a
+      (** [fold_approx as_body kons t knil] is like [fold] except that
+          the [as_body] is applied to all cells in [t].  If [as_body]
+          returns [true], the summary body for that cell is used as
+          the first argument to [kons], and the walk of that branch of
+          the tree stops.  The function [fold_approx] is useful for
+          algorithms that want to use the summary body as an
+          approximation for all the bodies contained within a cell
+          when some condition is met. *)
 
 end
 
@@ -289,5 +308,32 @@ module Make(B : BODY) : BH_TREE with type b = B.b = struct
             Cell(lower, upper, sb, new_sub)
         else
           raise (Failure "remove: body not found in tree")
+
+  let rec fold kons t knil = 
+    match t with 
+    | Empty -> knil
+    | Body(b) -> kons b knil
+    | Cell(_,_,_,sub_ts) -> 
+        let res = ref knil in 
+        for i = 0 to 7 do 
+          res := fold kons sub_ts.(i) !res
+        done;
+        !res
+
+  let rec fold_approx as_body kons t knil = 
+    match t with 
+    | Empty -> knil
+    | Body(b) -> kons b knil
+    | Cell(_,_,sb,sub_ts) as c -> 
+        if as_body c then 
+          kons sb knil
+        else begin
+          let res = ref knil in 
+          for i = 0 to 7 do 
+            res := fold_approx as_body kons sub_ts.(i) !res
+          done;
+          !res
+        end
+          
 
 end
